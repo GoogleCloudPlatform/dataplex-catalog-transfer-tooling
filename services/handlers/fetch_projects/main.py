@@ -23,7 +23,7 @@ from fastapi import FastAPI, Response
 import uvicorn
 from common.entities import FetchProjectsTaskData
 from config import get_application_config
-from services.handlers.fetch_projects.handler import CloudTaskHandler
+from handler import CloudTaskHandler
 
 
 app = FastAPI()

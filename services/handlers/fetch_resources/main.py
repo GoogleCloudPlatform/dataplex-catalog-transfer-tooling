@@ -24,7 +24,7 @@ import uvicorn
 
 from config import get_application_config
 from common.entities import FetchResourcesTaskData
-from services.handlers.fetch_resources.handler import CloudTaskHandler
+from handler import CloudTaskHandler
 
 
 app = FastAPI()
