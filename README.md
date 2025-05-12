@@ -16,6 +16,11 @@ To address this concern we released dedicated tooling, which is encapsulated wit
 ## Data discovery
 You can discover all projects (with either Data Catalog or Dataplex API enabled) and resources (tag templates & entry groups) that are subjected to transfer.
 
+## Impact analysis
+You can analyze the consequences of permanently transferring resources to the new system by investigating IAM policies applied at the resources level as well as understand which resources are being actively used by investigating access patterns.
+
+You will also receive a mapping table showing the relation between Data Catalog and Dataplex Catalog resource names that you can use for comparison.
+
 # Setup
 1) Create a new Google Cloud project inside your organization's account.
 2) Create a Service Account in the project.
@@ -44,6 +49,8 @@ You can discover all projects (with either Data Catalog or Dataplex API enabled)
    * Dataplex API
    * Data Catalog API
 5) Create a Docker repository in Google Artifact Registry
+6) [Opt in public tag templates and tags for simultaneous availability of metadata in universal catalog](https://cloud.google.com/dataplex/docs/transition-to-dataplex-catalog#opt-in)
+
 # Build
 1) Clone the github repository
     ```
