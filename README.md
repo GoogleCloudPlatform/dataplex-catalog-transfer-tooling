@@ -32,6 +32,7 @@ You can discover all projects (with either Data Catalog or Dataplex API enabled)
    * roles/iam.securityReviewer
    * roles/run.invoker
    * roles/bigquery.jobUser
+   * roles/iam.serviceAccountUser
 4) Enable API:
    * Cloud Resource Manager API
    * BigQuery API
@@ -41,7 +42,7 @@ You can discover all projects (with either Data Catalog or Dataplex API enabled)
    * Artifact Registry API
    * Cloud Asset API
    * Dataplex API
-   * Datacatalog API
+   * Data Catalog API
 5) Create a Docker repository in Google Artifact Registry
 # Build
 1) Clone the github repository
