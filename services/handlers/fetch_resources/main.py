@@ -37,7 +37,7 @@ async def process_task(task_data: FetchResourcesTaskData, response: Response):
     """
     Route to process cloud tasks.
     """
-    body, status_code = await handler.handle_cloud_task(task_data)
+    body, status_code = handler.handle_cloud_task(task_data)
     response.status_code = status_code
 
     return body
