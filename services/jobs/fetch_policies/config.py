@@ -140,11 +140,11 @@ def parse_service_args(parser: ArgumentParser) -> None:
     parser.add_argument(
         "-hn",
         "--handler-name",
-        default="find-policies-handler",
+        default="fetch-policies-handler",
         type=str,
         help=(
             "The name of the handler responsible for processing projects "
-            "(default: 'find-policies-handler')."
+            "(default: 'fetch-policies-handler')."
         ),
     )
 
