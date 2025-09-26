@@ -26,25 +26,25 @@ fi
 
 # ---------- Configuration ----------
 # Mandatory parameters: SCOPE, SERVICE_ACCOUNT and ASPECT_TYPE_PROJECT_ID
-# These three parameters must be explicitly set before running the script.
+# These parameters must be explicitly set before running the script.
 
 # SCOPE: Defines the scope of projects for the process.
 # Should be formatted as:
-#   - "organizations/{orgNumber}"" (e.g., "organizations/123456789012")
-#   - "folders/{folderNumber}"" (e.g., "folders/987654321098")
-#   - "projects/{projectNumber}"" (e.g., "projects/123456789012")
-SCOPE=<projects/{projectNumber}>
+#   - "organizations/{orgNumber}" (e.g., "organizations/123456789012")
+#   - "folders/{folderNumber}" (e.g., "folders/987654321098")
+#   - "projects/{projectNumber}" (e.g., "projects/123456789012")
+SCOPE=""
 
 # SERVICE_ACCOUNT: The email of the service account to be used for authentication.
 # Example format:
 #   SERVICE_ACCOUNT="your-service-account@your-project.iam.gserviceaccount.com"
-SERVICE_ACCOUNT=<your-service-account@your-project.iam.gserviceaccount.com>
+SERVICE_ACCOUNT=""
 
-# ASPECT_TYPE_PROJECT_ID: The project ID where the process should create the 3P aspect type.
+# ASPECT_TYPE_PROJECT_ID: Set only if the Lakes and Zones Search functionality is planned for installation.
 # This project will be used to store references to the lake and zone.
 # Example format:
 #   ASPECT_TYPE_PROJECT_ID="aspect-type-project-id"
-ASPECT_TYPE_PROJECT_ID=<aspect-type-project-id>
+ASPECT_TYPE_PROJECT_ID=""
 
 # Optional parameters: These can be left unchanged or modified as needed.
 REGION="us-central1"  # Default region for deployment
@@ -54,11 +54,104 @@ REGION="us-central1"  # Default region for deployment
 REGISTRY="us-docker.pkg.dev/dataplex-transfer-tooling/dataplex-transfer-tooling"  # Docker registry for images
 SINK_NAME="data-catalog-audit-logs"  # Sink name for audit logs
 
-# ---------- Get Project ID ----------
+DEBUG=false
+FAILED_ACTIONS=()
+
+# ---------- Interactive Component Selection ----------
+echo ""
+echo "🎯 Welcome to Dataplex Transfer Tooling Setup!"
+echo "=============================================="
+echo ""
+echo "Please select which components you want to install:"
+echo ""
+
+ask_yes_no() {
+    local question="$1"
+    local response
+    while true; do
+        read -p "$question (y/n): " response
+        case $response in
+            [Yy]* ) return 0;;
+            [Nn]* ) return 1;;
+            * ) echo "Please answer yes (y) or no (n).";;
+        esac
+    done
+}
+
+INSTALL_DATA_DISCOVERY=false
+INSTALL_IMPACT_ANALYSIS=false
+INSTALL_TRANSFER_AT_SCALE=false
+INSTALL_CLEAN_UP=false
+INSTALL_MONITORING=false
+INSTALL_LAKES_ZONES=false
+
+if ask_yes_no "1️⃣  Install Data Discovery functionality?"; then
+    INSTALL_DATA_DISCOVERY=true
+    echo "   ✅ Data Discovery will be installed"
+else
+    echo "   ❌ Data Discovery will be skipped"
+fi
+
+if ask_yes_no "2️⃣  Install Impact Analysis functionality?"; then
+    INSTALL_IMPACT_ANALYSIS=true
+    echo "   ✅ Impact Analysis will be installed (includes audit log configuration)"
+else
+    echo "   ❌ Impact Analysis will be skipped"
+fi
+
+if ask_yes_no "3️⃣  Install Transfer at Scale functionality?"; then
+    INSTALL_TRANSFER_AT_SCALE=true
+    echo "   ✅ Transfer at Scale will be installed"
+else
+    echo "   ❌ Transfer at Scale will be skipped"
+fi
+
+if ask_yes_no "4️⃣  Install Clean Up functionality?"; then
+    INSTALL_CLEAN_UP=true
+    echo "   ✅ Clean Up will be installed"
+else
+    echo "   ❌ Clean Up will be skipped"
+fi
+
+if ask_yes_no "5️⃣  Install Monitoring Dashboard?"; then
+    INSTALL_MONITORING=true
+    echo "   ✅ Monitoring Dashboard will be installed"
+else
+    echo "   ❌ Monitoring Dashboard will be skipped"
+fi
+
+if ask_yes_no "6️⃣  Install Lakes and Zones Search functionality?"; then
+    INSTALL_LAKES_ZONES=true
+    echo "   ✅ Lakes and Zones Search will be installed"
+else
+    echo "   ❌ Lakes and Zones Search will be skipped"
+fi
+
+echo ""
+echo "📋 Installation Summary:"
+echo "========================"
+echo "Data Discovery: $([ "$INSTALL_DATA_DISCOVERY" = true ] && echo "✅ Yes" || echo "❌ No")"
+echo "Impact Analysis: $([ "$INSTALL_IMPACT_ANALYSIS" = true ] && echo "✅ Yes" || echo "❌ No")"
+echo "Transfer at Scale: $([ "$INSTALL_TRANSFER_AT_SCALE" = true ] && echo "✅ Yes" || echo "❌ No")"
+echo "Clean Up: $([ "$INSTALL_CLEAN_UP" = true ] && echo "✅ Yes" || echo "❌ No")"
+echo "Monitoring Dashboard: $([ "$INSTALL_MONITORING" = true ] && echo "✅ Yes" || echo "❌ No")"
+echo "Lakes and Zones Search: $([ "$INSTALL_LAKES_ZONES" = true ] && echo "✅ Yes" || echo "❌ No")"
+echo ""
+
+if ! ask_yes_no "Proceed with installation?"; then
+    echo "Installation cancelled by user."
+    exit 0
+fi
+
+# ---------- Validate Configuration ----------
+echo ""
+echo "Validating configuration..."
+echo "----------------------------------------------------"
+
 echo "Getting current GCP project..."
+VALIDATION_FAILED=false
 PROJECT_ID=$(gcloud config get-value project 2>/dev/null)
 
-# Check if PROJECT_ID was successfully retrieved
 if [[ -z "$PROJECT_ID" || "$PROJECT_ID" == "(unset)" || "$PROJECT_ID" == "None" ]]; then
   echo ""
   echo "❌ Error: Failed to get current GCP project ID."
@@ -69,13 +162,41 @@ if [[ -z "$PROJECT_ID" || "$PROJECT_ID" == "(unset)" || "$PROJECT_ID" == "None" 
   echo "Replace {projectId} with your actual project ID."
   echo "This project will be used for transfer tooling deployment."
   echo ""
-  exit 1
+  VALIDATION_FAILED=true
+fi
+
+if [[ -z "$SCOPE" ]]; then
+    echo "❌ Error: SCOPE must be configured before running the script."
+    echo "Please set SCOPE in the configuration section."
+    echo "Example: SCOPE=\"organizations/123456789012\""
+    echo ""
+    VALIDATION_FAILED=true
+fi
+
+if [[ -z "$SERVICE_ACCOUNT" ]]; then
+    echo "❌ Error: SERVICE_ACCOUNT must be configured before running the script."
+    echo "Please set SERVICE_ACCOUNT in the configuration section."
+    echo "Example: SERVICE_ACCOUNT=\"your-service-account@your-project.iam.gserviceaccount.com\""
+    echo ""
+    VALIDATION_FAILED=true
+fi
+
+if [ "$INSTALL_LAKES_ZONES" = true ] && [[ -z "$ASPECT_TYPE_PROJECT_ID" ]]; then
+    echo "❌ Error: ASPECT_TYPE_PROJECT_ID must be configured when Lakes and Zones functionality is selected."
+    echo "Please set ASPECT_TYPE_PROJECT_ID in the configuration section."
+    echo "Example: ASPECT_TYPE_PROJECT_ID=\"your-aspect-project-id\""
+    echo ""
+    VALIDATION_FAILED=true
+fi
+
+if [ "$VALIDATION_FAILED" = true ]; then
+    echo ""
+    echo "Please fix the configuration errors above and run the script again."
+    exit 1
 fi
 
 echo "✅ Using project: $PROJECT_ID (project used for transfer tooling)"
-
-DEBUG=false
-FAILED_ACTIONS=()
+echo "✅ All configuration parameters validated successfully!"
 
 # ---------- try wrapper ----------
 try() {
@@ -128,48 +249,72 @@ fi
 # ---------- Arguments ----------
 BASE_ARGS="main.py -p $PROJECT_ID"
 
-declare -A IMAGES_ARGS=(
-  [fetch-projects-handler]="$BASE_ARGS"
-  [fetch-resources-handler]="$BASE_ARGS"
-  [find-resource-names-handler]="$BASE_ARGS"
-  [fetch-policies-handler]="$BASE_ARGS"
-  [convert-private-tag-templates-handler]="$BASE_ARGS"
-  [transfer-resources-handler]="$BASE_ARGS"
-  [clean-up-handler]="main.py"
-  [lakes-handler]="main.py"
+# ---------- Build the IMAGES_ARGS array based on user selection ----------
+declare -A IMAGES_ARGS=()
 
-  [fetch-projects-job]="$BASE_ARGS"
-  [fetch-resources-job]="$BASE_ARGS"
-  [find-resource-names-job]="$BASE_ARGS"
-  [audit-logs-job]="$BASE_ARGS"
-  [fetch-policies-job]="$BASE_ARGS -s $SCOPE"
-  [convert-private-tag-templates-job]="$BASE_ARGS -s $SCOPE"
-  [transfer-resources-job]="$BASE_ARGS -s $SCOPE"
-  [clean-up-job]="$BASE_ARGS -s $SCOPE"
-  [analytics-job]="$BASE_ARGS"
-  [lakes-job]="$BASE_ARGS -atp $ASPECT_TYPE_PROJECT_ID"
-)
+if [ "$INSTALL_DATA_DISCOVERY" = true ]; then
+    IMAGES_ARGS[fetch-projects-handler]="$BASE_ARGS"
+    IMAGES_ARGS[fetch-resources-handler]="$BASE_ARGS"
+    IMAGES_ARGS[fetch-projects-job]="$BASE_ARGS"
+    IMAGES_ARGS[fetch-resources-job]="$BASE_ARGS"
+fi
 
-# Custom memory for job
-declare -A JOB_MEMORY=(
- [find-resource-names-job]="2Gi"
- [fetch-policies-job]="1Gi"
- [transfer-resources-job]="4Gi"
-)
+if [ "$INSTALL_IMPACT_ANALYSIS" = true ]; then
+    IMAGES_ARGS[find-resource-names-handler]="$BASE_ARGS"
+    IMAGES_ARGS[fetch-policies-handler]="$BASE_ARGS"
+    IMAGES_ARGS[find-resource-names-job]="$BASE_ARGS"
+    IMAGES_ARGS[audit-logs-job]="$BASE_ARGS"
+    IMAGES_ARGS[fetch-policies-job]="$BASE_ARGS -s $SCOPE"
+fi
 
-# Override for execution timeout (in seconds)
-declare -A JOB_TIMEOUTS=(
-  [find-resource-names-job]=36000
-  [fetch-policies-job]=7200
-  [convert-private-tag-templates-job]=3600
-  [transfer-resources-job]=7200
-  [lakes-job]=14400
-)
+if [ "$INSTALL_TRANSFER_AT_SCALE" = true ]; then
+    IMAGES_ARGS[convert-private-tag-templates-handler]="$BASE_ARGS"
+    IMAGES_ARGS[transfer-resources-handler]="$BASE_ARGS"
+    IMAGES_ARGS[convert-private-tag-templates-job]="$BASE_ARGS -s $SCOPE"
+    IMAGES_ARGS[transfer-resources-job]="$BASE_ARGS -s $SCOPE"
+fi
 
-# Custom CPU for job
-declare -A JOB_CPU=(
-  [lakes-job]=2
-)
+if [ "$INSTALL_CLEAN_UP" = true ]; then
+    IMAGES_ARGS[clean-up-handler]="main.py"
+    IMAGES_ARGS[clean-up-job]="$BASE_ARGS -s $SCOPE"
+fi
+
+if [ "$INSTALL_MONITORING" = true ]; then
+    IMAGES_ARGS[analytics-job]="$BASE_ARGS"
+fi
+
+if [ "$INSTALL_LAKES_ZONES" = true ]; then
+    IMAGES_ARGS[lakes-handler]="main.py"
+    IMAGES_ARGS[lakes-job]="$BASE_ARGS -atp $ASPECT_TYPE_PROJECT_ID"
+fi
+
+if [ ${#IMAGES_ARGS[@]} -eq 0 ]; then
+    echo "❌ No components selected for installation. Exiting."
+    exit 0
+fi
+
+# ---------- Build Job Configuration based on user selection ----------
+declare -A JOB_MEMORY=()
+declare -A JOB_TIMEOUTS=()
+declare -A JOB_CPU=()
+
+if [ "$INSTALL_IMPACT_ANALYSIS" = true ]; then
+    JOB_MEMORY[find-resource-names-job]="2Gi"
+    JOB_MEMORY[fetch-policies-job]="1Gi"
+    JOB_TIMEOUTS[find-resource-names-job]=36000
+    JOB_TIMEOUTS[fetch-policies-job]=7200
+fi
+
+if [ "$INSTALL_TRANSFER_AT_SCALE" = true ]; then
+    JOB_MEMORY[transfer-resources-job]="4Gi"
+    JOB_TIMEOUTS[convert-private-tag-templates-job]=3600
+    JOB_TIMEOUTS[transfer-resources-job]=7200
+fi
+
+if [ "$INSTALL_LAKES_ZONES" = true ]; then
+    JOB_TIMEOUTS[lakes-job]=14400
+    JOB_CPU[lakes-job]=2
+fi
 
 # Random base hour and job schedule calculation
 random_base_hour=$((RANDOM % 4))
@@ -181,15 +326,26 @@ analytics_hour=$((random_base_hour + 14))
 fetch_policies_hour=$((random_base_hour + 15))
 lakes_hour=$((RANDOM % 24))
 
-# Define cron schedule for jobs
-declare -A JOB_SCHEDULES=(
- [fetch-projects-job]="0 $fetch_projects_hour * * *"
- [fetch-resources-job]="0 $fetch_resources_hour * * *"
- [find-resource-names-job]="0 $find_resource_names_hour * * *"
- [analytics-job]="50 $analytics_hour * * *"
- [fetch-policies-job]="0 $fetch_policies_hour * * *"
- [lakes-job]="0 $lakes_hour * * *"
-)
+# ---------- Define cron schedule for jobs ----------
+declare -A JOB_SCHEDULES=()
+
+if [ "$INSTALL_DATA_DISCOVERY" = true ]; then
+    JOB_SCHEDULES[fetch-projects-job]="0 $fetch_projects_hour * * *"
+    JOB_SCHEDULES[fetch-resources-job]="0 $fetch_resources_hour * * *"
+fi
+
+if [ "$INSTALL_IMPACT_ANALYSIS" = true ]; then
+    JOB_SCHEDULES[find-resource-names-job]="0 $find_resource_names_hour * * *"
+    JOB_SCHEDULES[fetch-policies-job]="0 $fetch_policies_hour * * *"
+fi
+
+if [ "$INSTALL_MONITORING" = true ]; then
+    JOB_SCHEDULES[analytics-job]="50 $analytics_hour * * *"
+fi
+
+if [ "$INSTALL_LAKES_ZONES" = true ]; then
+    JOB_SCHEDULES[lakes-job]="0 $lakes_hour * * *"
+fi
 
 # # ---------- Artifact Registry Auth ----------
 REGISTRY_HOSTNAME=$(echo "$REGISTRY" | cut -d'/' -f1)
@@ -198,9 +354,9 @@ echo "🔒 Authenticating Docker with Artifact Registry..."
 echo "----------------------------------------------------"
 try gcloud auth configure-docker "$REGISTRY_HOSTNAME"
 
-# ---------- Deploy All Images ----------
+# ---------- Deploy Selected Images ----------
 echo ""
-echo "🚀 Starting pull + deploy process for all images..."
+echo "🚀 Starting pull + deploy process for selected images..."
 echo "----------------------------------------------------"
 
 DEPLOYMENT_FAILED=false
@@ -281,7 +437,7 @@ for IMAGE in "${!IMAGES_ARGS[@]}"; do
 done
 
 if [[ "$DEPLOYMENT_FAILED" = false ]]; then
-  echo "✅ All handlers deployed as services and jobs deployed as Cloud Run jobs!"
+  echo "✅ All selected handlers deployed as services and jobs deployed as Cloud Run jobs!"
 else
   echo "⚠️ Some handlers or jobs failed to deploy. See above for details."
 fi
@@ -317,9 +473,11 @@ run_audit_log_sink_job() {
   echo "✅ Audit log sink creation completed successfully!"
 }
 
-if ! run_audit_log_sink_job; then
-  echo ""
-  echo "⚠️ Skipping remaining post-deploy steps due to audit log sink job failure."
+if [ "$INSTALL_IMPACT_ANALYSIS" = true ]; then
+    if ! run_audit_log_sink_job; then
+        echo ""
+        echo "⚠️ Skipping remaining post-deploy steps due to audit log sink job failure."
+    fi
 fi
 
 # ---------- Final Report And Next Steps----------
@@ -327,30 +485,32 @@ echo ""
 if [[ ${#FAILED_ACTIONS[@]} -eq 0 ]]; then
  echo "🐱 All operations completed successfully!"
  echo ""
- echo "🎉 Next Step:"
- echo ""
- echo "   Enable Data Access Logs via the Google Cloud Console:"
- echo "   - Go to the Audit Logs page in the Google Cloud Console."
- echo "   - Locate 'Data Catalog' in the Service column of the Data Access audit logs configuration table."
- echo "   - **Important**: Make sure you are at the ORGANIZATION level (not project level)."
- echo "   - Select your organization from the project/organization picker at the top."
- echo "   - Click on 'Data Catalog' to open the configuration panel."
- echo "   - In the 'Log Types' tab, select the Data Access audit log types you want to enable:"
- echo "     - DATA_READ"
- echo "     - DATA_WRITE"
- echo "     - ADMIN_READ"
- echo "   - Go to the 'Exempted Principals' tab in the information panel."
- echo "   - Click 'Add exempted principal' and add the service account used by transfer tooling (e.g., service-account@project-id.iam.gserviceaccount.com)."
- echo "   - In the **Disabled permission types** section for the exempted principal, select audit log types that you want to disable:"
- echo "     - ADMIN_READ"
- echo "     - DATA_READ"
- echo "     - DATA_WRITE"
- echo "   - Click 'Done'."
- echo "   - Click 'Save'."
- echo ""
- echo "   Note: Organization-level audit logs ensure comprehensive coverage across all projects"
- echo "   and prevent the need to configure audit logs individually for each project."
- echo ""
+ if [ "$INSTALL_IMPACT_ANALYSIS" = true ]; then
+  echo "🎉 Next Step:"
+  echo ""
+  echo "   Enable Data Access Logs via the Google Cloud Console:"
+  echo "   - Go to the Audit Logs page in the Google Cloud Console."
+  echo "   - Locate 'Data Catalog' in the Service column of the Data Access audit logs configuration table."
+  echo "   - **Important**: Make sure you are at the ORGANIZATION level (not project level)."
+  echo "   - Select your organization from the project/organization picker at the top."
+  echo "   - Click on 'Data Catalog' to open the configuration panel."
+  echo "   - In the 'Log Types' tab, select the Data Access audit log types you want to enable:"
+  echo "     - DATA_READ"
+  echo "     - DATA_WRITE"
+  echo "     - ADMIN_READ"
+  echo "   - Go to the 'Exempted Principals' tab in the information panel."
+  echo "   - Click 'Add exempted principal' and add the service account used by transfer tooling (e.g., service-account@project-id.iam.gserviceaccount.com)."
+  echo "   - In the **Disabled permission types** section for the exempted principal, select audit log types that you want to disable:"
+  echo "     - ADMIN_READ"
+  echo "     - DATA_READ"
+  echo "     - DATA_WRITE"
+  echo "   - Click 'Done'."
+  echo "   - Click 'Save'."
+  echo ""
+  echo "   Note: Organization-level audit logs ensure comprehensive coverage across all projects"
+  echo "   and prevent the need to configure audit logs individually for each project."
+  echo ""
+ fi
 else
  echo "🙀 The following operations failed:"
  for action in "${FAILED_ACTIONS[@]}"; do
