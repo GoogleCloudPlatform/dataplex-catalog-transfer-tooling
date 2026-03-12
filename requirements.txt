@@ -2,7 +2,7 @@ annotated-types==0.7.0
 anyio==4.9.0
 asgiref==3.8.1
 astroid==3.3.8
-black==25.1.0
+black==26.3.1
 blinker==1.9.0
 cachetools==5.5.1
 certifi==2024.12.14
